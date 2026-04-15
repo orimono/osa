@@ -17,7 +17,25 @@ func ExecutorsHandler(nc *nats.Conn, timeout time.Duration) http.HandlerFunc {
 			return
 		}
 
-		// msg, err := nc.Request("orimono.")
+		payload, _ := json.Marshal(map[string]string{
+			"node_id": nodeID,
+		})
+
+		msg, err := nc.Request("orimono.loom.executors", payload, timeout)
+		if err != nil {
+			http.Error(w, "upstream unavailable", http.StatusServiceUnavailable)
+			return
+		}
+
+		var rpcErr rpcError
+		if json.Unmarshal(msg.Data, &rpcErr) == nil && rpcErr.Error != "" {
+			http.Error(w, rpcErr.Error, http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Write(msg.Data)
 	}
 }
 

@@ -22,20 +22,33 @@ func HistoryHandler(nc *nats.Conn, timeout time.Duration) http.HandlerFunc {
 			return
 		}
 
-		limit := 120
-		if l := r.URL.Query().Get("limit"); l != "" {
-			if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 1440 {
-				limit = v
+		fromTs, err := strconv.ParseInt(r.URL.Query().Get("from_ts"), 10, 64)
+		if err != nil || fromTs <= 0 {
+			http.Error(w, "valid from_ts required (Unix seconds)", http.StatusBadRequest)
+			return
+		}
+		toTs, err := strconv.ParseInt(r.URL.Query().Get("to_ts"), 10, 64)
+		if err != nil || toTs <= fromTs {
+			http.Error(w, "valid to_ts required (Unix seconds, must be > from_ts)", http.StatusBadRequest)
+			return
+		}
+
+		maxPoints := 300
+		if m := r.URL.Query().Get("max_points"); m != "" {
+			if v, err := strconv.Atoi(m); err == nil && v > 0 && v <= 1000 {
+				maxPoints = v
 			}
 		}
 
 		payload, _ := json.Marshal(map[string]any{
-			"node_id": nodeID,
-			"type":    typ,
-			"limit":   limit,
+			"node_id":    nodeID,
+			"type":       typ,
+			"from_ts":    fromTs,
+			"to_ts":      toTs,
+			"max_points": maxPoints,
 		})
 
-		msg, err := nc.Request("orimono.loom.history", payload, timeout)
+		msg, err := nc.Request("orimono.tsumu.history", payload, timeout)
 		if err != nil {
 			http.Error(w, "upstream unavailable", http.StatusServiceUnavailable)
 			return
